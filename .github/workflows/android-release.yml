@@ -26,11 +26,11 @@ jobs:
     - name: 检查 Gradle 项目
       id: check_gradle
       run: |
-        if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ] || [ -f "settings.gradle" ] || [ -f "settings.gradle.kts" ]; then
+        if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ] || [ -f "settings.gradle" ] || [ -f "settings.gradle.kts" ] || [ -f "gradlew" ]; then
           echo "has_gradle=true" >> $GITHUB_OUTPUT
         else
           echo "has_gradle=false" >> $GITHUB_OUTPUT
-          echo "⚠️ 未在根目录下检测到 Gradle 构建文件 (build.gradle / settings.gradle)。"
+          echo "⚠️ 未检测到 Gradle 构建文件。"
         fi
 
     - name: 设置JDK 17
@@ -55,7 +55,7 @@ jobs:
       if: steps.check_gradle.outputs.has_gradle == 'true'
       id: check_secrets
       run: |
-        if [ -n "${{ secrets.KEYSTORE_FILE }}" ] && [ -n "${{ secrets.KEYSTORE_ALIAS || secrets.KEY_ALIAS }}" ] && [ -n "${{ secrets.KEYSTORE_PASSWORD }}" ] && [ -n "${{ secrets.KEY_PASSWORD }}" ]; then
+        if [ -n "${{ secrets.KEYSTORE_FILE }}" ] && [ -n "${{ secrets.KEY_ALIAS || secrets.KEYSTORE_ALIAS }}" ] && [ -n "${{ secrets.KEYSTORE_PASSWORD }}" ] && [ -n "${{ secrets.KEY_PASSWORD }}" ]; then
           echo "result=success" >> $GITHUB_OUTPUT
           echo "has_secrets=true" >> $GITHUB_OUTPUT
         else
@@ -108,8 +108,8 @@ jobs:
             REF_NAME="${GITHUB_REF#refs/tags/}"
             VERSION="${REF_NAME#v}"
           fi
-          mv app-release.apk "compassor-v${VERSION}.apk"
-          echo "APK_NAME=compassor-v${VERSION}.apk" >> $GITHUB_ENV
+          mv app-release.apk "app-v${VERSION}.apk"
+          echo "APK_NAME=app-v${VERSION}.apk" >> $GITHUB_ENV
           echo "VERSION=$VERSION" >> $GITHUB_ENV
         fi
 
