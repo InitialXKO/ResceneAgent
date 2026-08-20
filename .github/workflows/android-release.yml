@@ -23,22 +23,36 @@ jobs:
     - name: 检出代码
       uses: actions/checkout@v4
 
+    - name: 检查 Gradle 项目
+      id: check_gradle
+      run: |
+        if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ] || [ -f "settings.gradle" ] || [ -f "settings.gradle.kts" ]; then
+          echo "has_gradle=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_gradle=false" >> $GITHUB_OUTPUT
+          echo "⚠️ 未在根目录下检测到 Gradle 构建文件 (build.gradle / settings.gradle)。"
+        fi
+
     - name: 设置JDK 17
+      if: steps.check_gradle.outputs.has_gradle == 'true'
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
 
     - name: 设置Gradle Wrapper
+      if: steps.check_gradle.outputs.has_gradle == 'true' && hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') != ''
       uses: gradle/gradle-build-action@v2
 
     - name: 授予Gradle执行权限
+      if: steps.check_gradle.outputs.has_gradle == 'true'
       run: |
         if [ -f gradlew ]; then
           chmod +x gradlew
         fi
 
     - name: Check for required secrets
+      if: steps.check_gradle.outputs.has_gradle == 'true'
       id: check_secrets
       run: |
         if [ -n "${{ secrets.KEYSTORE_FILE }}" ] && [ -n "${{ secrets.KEYSTORE_ALIAS || secrets.KEY_ALIAS }}" ] && [ -n "${{ secrets.KEYSTORE_PASSWORD }}" ] && [ -n "${{ secrets.KEY_PASSWORD }}" ]; then
@@ -52,7 +66,7 @@ jobs:
       shell: bash
 
     - name: 配置签名密钥
-      if: steps.check_secrets.outputs.has_secrets == 'true'
+      if: steps.check_gradle.outputs.has_gradle == 'true' && steps.check_secrets.outputs.has_secrets == 'true'
       run: |
         # 解码base64编码的密钥文件
         echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > compassor-release.jks || echo "${{ secrets.KEYSTORE_FILE }}" | base64 -d > compassor-release.jks
@@ -64,6 +78,7 @@ jobs:
         echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> keystore.properties
 
     - name: 构建发布版APK
+      if: steps.check_gradle.outputs.has_gradle == 'true'
       run: |
         mkdir -p app/build/outputs/apk/release
         GRADLE_CMD="./gradlew"
@@ -73,7 +88,7 @@ jobs:
 
         if [ -f "keystore.properties" ]; then
           echo "使用签名配置构建..."
-          $GRADLE_CMD assembleRelease --stacktrace || true
+          $GRADLE_CMD assembleRelease --stacktrace
         else
           echo "⚠️ 未配置签名，构建调试版APK..."
           $GRADLE_CMD assembleDebug --stacktrace || true
@@ -83,6 +98,7 @@ jobs:
         fi
 
     - name: 重命名APK
+      if: steps.check_gradle.outputs.has_gradle == 'true'
       run: |
         mkdir -p app/build/outputs/apk/release
         cd app/build/outputs/apk/release
@@ -98,6 +114,7 @@ jobs:
         fi
 
     - name: 生成变更日志
+      if: steps.check_gradle.outputs.has_gradle == 'true' && env.APK_NAME != ''
       id: changelog
       run: |
         echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
@@ -114,7 +131,7 @@ jobs:
 
     - name: 创建GitHub Release
       uses: softprops/action-gh-release@v1
-      if: (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && env.APK_NAME != ''
+      if: steps.check_gradle.outputs.has_gradle == 'true' && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && env.APK_NAME != ''
       with:
         files: app/build/outputs/apk/release/${{ env.APK_NAME }}
         body: ${{ steps.changelog.outputs.CHANGELOG }}
@@ -125,12 +142,13 @@ jobs:
 
     - name: 上传Release APK
       uses: actions/upload-artifact@v4
-      if: env.APK_NAME != ''
+      if: steps.check_gradle.outputs.has_gradle == 'true' && env.APK_NAME != ''
       with:
         name: release-apk
         path: app/build/outputs/apk/release/${{ env.APK_NAME }}
 
     - name: 构建完成通知
+      if: steps.check_gradle.outputs.has_gradle == 'true'
       run: |
         echo "🎉 发布版本构建完成！"
         echo "🏷️  版本: ${{ env.VERSION }}"
