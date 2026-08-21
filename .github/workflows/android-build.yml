@@ -1,0 +1,74 @@
+name: Android CI - Build APK
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 检查 Gradle 项目
+      id: check_gradle
+      run: |
+        if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ] || [ -f "settings.gradle" ] || [ -f "settings.gradle.kts" ] || [ -f "gradlew" ]; then
+          echo "has_gradle=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_gradle=false" >> $GITHUB_OUTPUT
+          echo "⚠️ 未在根目录下检测到 Gradle 构建文件。"
+        fi
+
+    - name: 设置JDK 17
+      if: steps.check_gradle.outputs.has_gradle == 'true'
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: 生成 Gradle Wrapper (如果不存在)
+      if: steps.check_gradle.outputs.has_gradle == 'true' && !hashFiles('gradlew')
+      run: |
+        gradle wrapper --gradle-version 8.6
+
+    - name: 设置Gradle Wrapper
+      if: steps.check_gradle.outputs.has_gradle == 'true' && hashFiles('**/gradle-wrapper.properties') != ''
+      uses: gradle/gradle-build-action@v2
+
+    - name: 授予Gradle执行权限
+      if: steps.check_gradle.outputs.has_gradle == 'true'
+      run: |
+        if [ -f gradlew ]; then
+          chmod +x gradlew
+        fi
+
+    - name: 构建调试版APK
+      if: steps.check_gradle.outputs.has_gradle == 'true'
+      run: |
+        GRADLE_CMD="./gradlew"
+        if [ ! -f "gradlew" ]; then
+          GRADLE_CMD="gradle"
+        fi
+        $GRADLE_CMD assembleDebug --stacktrace
+
+    - name: 上传调试版APK
+      if: steps.check_gradle.outputs.has_gradle == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
+
+    - name: 构建信息
+      if: steps.check_gradle.outputs.has_gradle == 'true'
+      run: |
+        echo "🎉 构建完成！"
+        if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+          echo "📦 APK大小: $(du -h app/build/outputs/apk/debug/app-debug.apk | cut -f1)"
+        fi
+        echo "✅ 版本: 1.0-DEBUG"
