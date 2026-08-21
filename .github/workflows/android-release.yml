@@ -30,7 +30,7 @@ jobs:
           echo "has_gradle=true" >> $GITHUB_OUTPUT
         else
           echo "has_gradle=false" >> $GITHUB_OUTPUT
-          echo "⚠️ 未检测到 Gradle 构建文件。"
+          echo "⚠️ 未在根目录下检测到 Gradle 构建文件。"
         fi
 
     - name: 设置JDK 17
@@ -40,8 +40,13 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
+    - name: 生成 Gradle Wrapper (如果不存在)
+      if: steps.check_gradle.outputs.has_gradle == 'true' && !hashFiles('gradlew')
+      run: |
+        gradle wrapper --gradle-version 8.6
+
     - name: 设置Gradle Wrapper
-      if: steps.check_gradle.outputs.has_gradle == 'true' && hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') != ''
+      if: steps.check_gradle.outputs.has_gradle == 'true' && hashFiles('**/gradle-wrapper.properties') != ''
       uses: gradle/gradle-build-action@v2
 
     - name: 授予Gradle执行权限
